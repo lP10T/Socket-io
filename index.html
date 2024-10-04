@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+            color: #4CAF50;
+            font-size: 2em;
+        }
+
+        #username-form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+        }
+
+        #username-form input {
+            padding: 10px;
+            margin: 10px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+
+        #username-form button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 1.2em;
+        }
+
+        #message-form {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #messages {
+            height: 300px;
+            width: 80%;
+            margin: 0 auto;
+            padding: 10px;
+            overflow-y: scroll;
+            background-color: transparent; /* Remove chat background */
+            box-shadow: none;
+        }
+
+        .message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            max-width: 60%;
+            word-wrap: break-word;
+        }
+
+        .message.mine {
+            text-align: left;
+            background-color: #e1ffc7;
+            margin-right: auto;
+        }
+
+        .message.other {
+            text-align: right;
+            background-color: #d1d1d1;
+            margin-left: auto;
+        }
+
+        .message strong {
+            color: #333;
+            font-size: 1em;
+        }
+
+        .message .timestamp {
+            font-size: 0.8em;
+            color: #666;
+            display: block;
+            margin-top: 5px;
+        }
+
+        #message-form input {
+            padding: 10px;
+            width: 60%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 1em;
+        }
+
+        #message-form button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+
+        #go-back-btn, #leave-btn {
+            padding: 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 1em;
+        }
+
+        /* Notification styling in the center */
+        #notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat Application</h1>
+
+    <!-- Join Channel Form -->
+    <div id="username-form">
+        <input id="name" placeholder="Enter your name" required>
+        <input id="channel" placeholder="Enter channel name" required>
+        <input id="code" placeholder="Enter channel code" required>
+        <button id="join-btn">Join Channel</button>
+    </div>
+
+    <!-- Notification in the center -->
+    <div id="notification"></div>
+
+    <!-- Chat Section -->
+    <div id="message-form">
+        <div id="messages"></div>
+        <input id="message" placeholder="Type a message" required>
+        <button id="send-btn">Send</button>
+        <button id="go-back-btn">Go Back</button>
+        <button id="leave-btn">Leave Channel</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const messagesDiv = document.getElementById('messages');
+        const usernameForm = document.getElementById('username-form');
+        const messageForm = document.getElementById('message-form');
+        const nameInput = document.getElementById('name');
+        const channelInput = document.getElementById('channel');
+        const codeInput = document.getElementById('code');
+        const messageInput = document.getElementById('message');
+        const joinButton = document.getElementById('join-btn');
+        const sendButton = document.getElementById('send-btn');
+        const goBackButton = document.getElementById('go-back-btn');
+        const leaveButton = document.getElementById('leave-btn');
+        const notificationDiv = document.getElementById('notification');
+
+        let username = '';
+        let currentChannel = '';
+
+        // Join the channel when "Join Channel" button is clicked
+        joinButton.onclick = () => {
+            username = nameInput.value.trim();
+            currentChannel = channelInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (username && currentChannel && code) {
+                socket.emit('join channel', { name: username, channel: currentChannel, code });
+                usernameForm.style.display = 'none';
+                messageForm.style.display = 'block';
+            } else {
+                alert('Please fill all fields.');
+            }
+        };
+
+        // Send message when "Send" button is clicked or "Enter" is pressed
+        sendButton.onclick = sendMessage;
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message) {
+                socket.emit('chat message', { message });
+                messageInput.value = ''; // Clear input field
+            }
+        }
+
+        // Handle "Go Back" button
+        goBackButton.onclick = () => {
+            messageForm.style.display = 'none';
+            usernameForm.style.display = 'block';
+        };
+
+        // Handle "Leave Channel" button
+        leaveButton.onclick = () => {
+            socket.emit('leave channel', { name: username, channel: currentChannel });
+            nameInput.value = '';
+            channelInput.value = '';
+            codeInput.value = '';
+            messageForm.style.display = 'none';
+            usernameForm.style.display = 'block';
+            // messagesDiv.innerHTML = ''; // Clear chat history
+        };
+
+        // Format timestamp in 'MM/DD/YYYY hh:mm:ss AM/PM' format
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const year = date.getFullYear();
+            const hours = date.getHours() % 12 || 12;
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+            return `${month}/${day}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+        }
+
+        // Display notification in the center
+        function showNotification(message) {
+            notificationDiv.textContent = message;
+            notificationDiv.style.display = 'block';
+
+            setTimeout(() => {
+                notificationDiv.style.display = 'none';
+            }, 3000); // Hide after 3 seconds
+        }
+
+        // Listen for chat messages and display them
+        socket.on('chat message', (data) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+
+            if (data.from === username) {
+                messageElement.classList.add('mine'); // Messages sent by current user
+            } else {
+                messageElement.classList.add('other'); // Messages sent by others
+            }
+
+            messageElement.innerHTML = `<strong>${data.from}</strong>: ${data.message}<span class="timestamp">${formatTimestamp(data.timestamp)}</span>`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+        });
+
+        // Show system messages (such as user joining or leaving)
+        socket.on('message', (data) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.textContent = `${data.username}: ${data.message}`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+        });
+
+        // Show join/leave notification
+        socket.on('join message', (data) => {
+            showNotification(`${data.username} joined the channel.`);
+        });
+
+        socket.on('leave message', (data) => {
+            showNotification(`${data.username} left the channel.`);
+        });
+    </script>
+</body>
+</html>
